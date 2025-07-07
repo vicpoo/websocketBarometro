@@ -10,21 +10,23 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/vicpoo/websocketBarometro/core"
 	"github.com/vicpoo/websocketBarometro/Barometro/infrastructure"
 )
 
-// Configurar WebSocket sin restricciones
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Acepta conexiones desde cualquier origen
+		return true
 	},
 }
 
 func main() {
-	// Configurar Gin
+	// ✅ Inicializar conexión a la base de datos
+	core.InitDB()
+
 	r := gin.Default()
 
-	// Configuración CORS más completa
+	// Middleware CORS
 	r.Use(func(c *gin.Context) {
 		c.Header("Access-Control-Allow-Origin", "*")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -36,33 +38,30 @@ func main() {
 			return
 		}
 
-		// Logger incorporado
 		log.Printf("Request: %s %s", c.Request.Method, c.Request.URL.Path)
-
 		c.Next()
 	})
 
-	// Inicializar el hub de WebSocket
+	// Inicializar WebSocket hub
 	hub := infrastructure.NewHub()
 	go hub.Run()
 
-	// Configurar servicio de mensajería
+	// Inicializar servicio de mensajería (RabbitMQ)
 	messagingService := infrastructure.NewMessagingService(hub)
 	defer messagingService.Close()
 
-	// Configurar rutas
+	// Rutas para WebSocket
 	infrastructure.SetupRoutes(r, hub)
 
-	// Iniciar consumidor de RabbitMQ para mensajes barométricos
+	// Iniciar consumidor de RabbitMQ
 	if err := messagingService.ConsumeBarometricMessages(); err != nil {
 		log.Fatalf("Failed to start RabbitMQ consumer: %v", err)
 	}
 
-	// Manejar señales para apagado limpio
+	// Señal para cerrar app
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Iniciar servidor en una goroutine
 	go func() {
 		if err := r.Run(":8002"); err != nil {
 			log.Fatalf("Failed to start server: %v", err)
@@ -72,7 +71,6 @@ func main() {
 	log.Println("Server started on port 8002")
 	log.Println("Barometric consumer started")
 
-	// Esperar señal de apagado
 	<-sigChan
 	log.Println("Shutting down server...")
 }
