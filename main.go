@@ -64,12 +64,12 @@ func main() {
 
 	// Iniciar servidor en una goroutine
 	go func() {
-		if err := r.Run(":8001"); err != nil {
+		if err := r.Run(":8002"); err != nil {
 			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()
 
-	log.Println("Server started on port 8001")
+	log.Println("Server started on port 8002")
 	log.Println("Barometric consumer started")
 
 	// Esperar señal de apagado
